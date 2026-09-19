@@ -1,0 +1,25 @@
+{
+    "newspaperName": "THE ROBOTICS TIMES",
+    "articles": [
+        {
+            "id": 1789857141863,
+            "title": "You!",
+            "category": "News",
+            "author": "Pollito",
+            "description": "It worked!",
+            "content": "It fucking worked! HA HA HA HA!",
+            "image": "",
+            "date": "19/9/2026"
+        },
+        {
+            "id": 1789857096954,
+            "title": "Hello World",
+            "category": "News",
+            "author": "Me Or You IDK",
+            "description": "Fourth Try",
+            "content": "Now it should work",
+            "image": "",
+            "date": "19/9/2026"
+        }
+    ]
+}
