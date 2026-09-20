@@ -2,8 +2,17 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { URL } = require("url");
+const { Pool } = require("pg");
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
+});
 
 const PORT = process.env.PORT || 3000;
+
 const DATA_FILE = path.join(__dirname, "newspaper.json");
 const PUBLIC_FOLDER = path.join(__dirname, "public");
 
