@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { URL } = require("url");
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, "newspaper.json");
 const PUBLIC_FOLDER = path.join(__dirname, "public");
 
@@ -172,7 +172,7 @@ const server = http.createServer((req, res) => {
     res.end("404 - Not Found");
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, "0.0.0.0", () => {
     console.log(`Newspaper running at http://localhost:${PORT}`);
     console.log(`Admin panel at http://localhost:${PORT}/admin`);
 });
