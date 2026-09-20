@@ -24,16 +24,58 @@ function sendJSON(res, statusCode, data) {
     res.end(JSON.stringify(data));
 }
 
-function readNewspaper() {
-    return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-}
+async function initializeDatabase() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS articles (
+            id BIGINT PRIMARY KEY,
+            title TEXT NOT NULL,
+            category TEXT DEFAULT 'General',
+            author TEXT DEFAULT 'Staff',
+            description TEXT DEFAULT '',
+            content TEXT NOT NULL,
+            image TEXT DEFAULT '',
+            date TEXT NOT NULL
+        )
+    `);
 
-function saveNewspaper(data) {
-    fs.writeFileSync(
-        DATA_FILE,
-        JSON.stringify(data, null, 4),
-        "utf8"
+    const result = await pool.query(
+        "SELECT COUNT(*) FROM articles"
     );
+
+    if (Number(result.rows[0].count) === 0) {
+        try {
+            const newspaper = JSON.parse(
+                fs.readFileSync(DATA_FILE, "utf8")
+            );
+
+            for (const article of newspaper.articles || []) {
+                await pool.query(
+                    `
+                    INSERT INTO articles
+                    (id, title, category, author, description, content, image, date)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    ON CONFLICT (id) DO NOTHING
+                    `,
+                    [
+                        article.id,
+                        article.title,
+                        article.category || "General",
+                        article.author || "Staff",
+                        article.description || "",
+                        article.content,
+                        article.image || "",
+                        article.date
+                    ]
+                );
+            }
+
+            console.log("Existing newspaper articles imported into PostgreSQL.");
+        } catch (error) {
+            console.log("No existing articles were imported.");
+        }
+    }
+
+    console.log("PostgreSQL database ready.");
 }
 
 const server = http.createServer((req, res) => {
@@ -81,21 +123,28 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // Get newspaper data
+    // Get newspaper data from PostgreSQL
     if (req.method === "GET" && url.pathname === "/api/newspaper") {
-        try {
-            const newspaper = readNewspaper();
-            sendJSON(res, 200, newspaper);
-        } catch (error) {
-            sendJSON(res, 500, {
-                error: "Could not read newspaper."
+        pool.query(
+            "SELECT * FROM articles ORDER BY id DESC"
+        )
+        .then(result => {
+            sendJSON(res, 200, {
+                articles: result.rows
             });
-        }
+        })
+        .catch(error => {
+            console.error(error);
+
+            sendJSON(res, 500, {
+                error: "Could not load newspaper."
+            });
+        });
 
         return;
     }
 
-    // Publish article
+    // Publish article to PostgreSQL
     if (req.method === "POST" && url.pathname === "/api/publish") {
         let body = "";
 
@@ -103,7 +152,7 @@ const server = http.createServer((req, res) => {
             body += chunk;
         });
 
-        req.on("end", () => {
+        req.on("end", async () => {
             try {
                 const article = JSON.parse(body);
 
@@ -113,8 +162,6 @@ const server = http.createServer((req, res) => {
                     });
                     return;
                 }
-
-                const newspaper = readNewspaper();
 
                 const newArticle = {
                     id: Date.now(),
@@ -127,9 +174,23 @@ const server = http.createServer((req, res) => {
                     date: new Date().toLocaleDateString()
                 };
 
-                newspaper.articles.unshift(newArticle);
-
-                saveNewspaper(newspaper);
+                await pool.query(
+                    `
+                    INSERT INTO articles
+                    (id, title, category, author, description, content, image, date)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    `,
+                    [
+                        newArticle.id,
+                        newArticle.title,
+                        newArticle.category,
+                        newArticle.author,
+                        newArticle.description,
+                        newArticle.content,
+                        newArticle.image,
+                        newArticle.date
+                    ]
+                );
 
                 sendJSON(res, 200, {
                     message: "Article published!",
@@ -148,31 +209,29 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // Delete article
+    // Delete article from PostgreSQL
     if (
         req.method === "DELETE" &&
         url.pathname.startsWith("/api/delete/")
     ) {
         const id = Number(url.pathname.split("/").pop());
 
-        try {
-            const newspaper = readNewspaper();
-
-            newspaper.articles = newspaper.articles.filter(
-                article => article.id !== id
-            );
-
-            saveNewspaper(newspaper);
-
+        pool.query(
+            "DELETE FROM articles WHERE id = $1",
+            [id]
+        )
+        .then(() => {
             sendJSON(res, 200, {
                 message: "Article deleted."
             });
+        })
+        .catch(error => {
+            console.error(error);
 
-        } catch (error) {
             sendJSON(res, 500, {
                 error: "Could not delete article."
             });
-        }
+        });
 
         return;
     }
@@ -181,7 +240,18 @@ const server = http.createServer((req, res) => {
     res.end("404 - Not Found");
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Newspaper running at http://localhost:${PORT}`);
-    console.log(`Admin panel at http://localhost:${PORT}/admin`);
-});
+async function startServer() {
+    try {
+        await initializeDatabase();
+
+        server.listen(PORT, "0.0.0.0", () => {
+            console.log(`Newspaper running at http://localhost:${PORT}`);
+            console.log(`Admin panel at http://localhost:${PORT}/admin`);
+        });
+    } catch (error) {
+        console.error("Could not start server:", error);
+        process.exit(1);
+    }
+}
+
+startServer();
