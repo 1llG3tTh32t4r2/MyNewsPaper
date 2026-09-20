@@ -1,1 +1,12 @@
-
+{
+    "name": "mynewspaper",
+    "version": "1.0.0",
+    "description": "My online newspaper",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "engines": {
+        "node": ">=24 <25"
+    }
+}
